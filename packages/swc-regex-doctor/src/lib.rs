@@ -1,9 +1,12 @@
-use swc_core::{common::Spanned, ecma::{
-    ast::{op, BinExpr, Ident, Program},
-    transforms::testing::test_inline,
-    visit::{as_folder, FoldWith, VisitMut, VisitMutWith as _},
-}};
 use swc_core::plugin::{plugin_transform, proxies::TransformPluginProgramMetadata};
+use swc_core::{
+    common::Spanned,
+    ecma::{
+        ast::{op, BinExpr, Ident, Program},
+        transforms::testing::test_inline,
+        visit::{as_folder, FoldWith, VisitMut, VisitMutWith as _},
+    },
+};
 
 pub struct TransformVisitor;
 
@@ -13,7 +16,7 @@ impl VisitMut for TransformVisitor {
     // https://rustdoc.swc.rs/swc_ecma_visit/trait.VisitMut.html
     fn visit_mut_bin_expr(&mut self, e: &mut BinExpr) {
         e.visit_mut_children_with(self);
- 
+
         if e.op == op!("===") {
             e.left = Box::new(Ident::new("kdy1".into(), e.left.span()).into());
         }
