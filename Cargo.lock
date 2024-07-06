@@ -1190,14 +1190,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "swc-regex-doctor"
-version = "0.1.0"
-dependencies = [
- "serde",
- "swc_core",
-]
-
-[[package]]
 name = "swc_atoms"
 version = "0.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1496,6 +1488,17 @@ dependencies = [
  "swc_ecma_ast",
  "swc_trace_macro",
  "tracing",
+]
+
+[[package]]
+name = "swc_regex_doctor"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "swc_core",
+ "swc_ecma_parser",
+ "swc_ecma_transforms_testing",
+ "testing",
 ]
 
 [[package]]

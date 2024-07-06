@@ -1,10 +1,12 @@
 [package]
-name = "swc-regex-doctor"
+name = "swc_regex_doctor"
 version = "0.1.0"
 edition = "2021"
+publish  = false
+
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [profile.release]
 lto = true
@@ -12,6 +14,13 @@ lto = true
 [dependencies]
 serde = "1"
 swc_core = { version = "0.96.*", features = ["ecma_plugin_transform"] }
+
+
+[dev-dependencies]
+swc_ecma_parser = "0.146.7"
+testing = "0.36.0"
+swc_ecma_transforms_testing = "0.143.1"
+
 
 # .cargo/config defines few alias to build plugin.
 # cargo build-wasi generates wasm-wasi32 binary

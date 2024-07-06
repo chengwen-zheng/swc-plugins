@@ -1,24 +1,137 @@
-use swc_core::plugin::{plugin_transform, proxies::TransformPluginProgramMetadata};
-use swc_core::{
-    common::Spanned,
-    ecma::{
-        ast::{op, BinExpr, Ident, Program},
-        transforms::testing::test_inline,
-        visit::{as_folder, FoldWith, VisitMut, VisitMutWith as _},
-    },
+use swc_core::common::DUMMY_SP;
+use swc_core::ecma::ast::{
+    BlockStmt, CallExpr, Callee, Expr, ExprStmt, Lit, MemberExpr, MemberProp, Stmt, Str,
 };
+use swc_core::ecma::{
+    ast::{Ident, Program},
+    visit::{as_folder, FoldWith, VisitMut, VisitMutWith as _},
+};
+use swc_core::plugin::{plugin_transform, proxies::TransformPluginProgramMetadata};
 
 pub struct TransformVisitor;
+
+impl TransformVisitor {
+    fn is_regex_identifier(e: &Expr) -> bool {
+        match e {
+            Expr::Ident(ident) => {
+                // println!("ident.sym: {:?}", ident.sym);
+                ident.sym == *"regex" || ident.sym == *"str"
+            }
+            Expr::Member(MemberExpr {
+                obj,
+                prop: MemberProp::Ident(_prop),
+                ..
+            }) => {
+                // println!("obj===>: {:?}", obj);
+                if let Expr::Ident(ident) = &**obj {
+                    return ident.sym == *"regex" || ident.sym == *"str";
+                }
+                false
+            }
+            _ => false,
+        }
+    }
+    fn is_regex_method(e: &Expr) -> bool {
+        match e {
+            Expr::Member(MemberExpr {
+                obj: _,
+                prop: MemberProp::Ident(prop),
+                ..
+            }) => {
+                prop.sym == *"exec"
+                    || prop.sym == *"match"
+                    || prop.sym == *"test"
+                    || prop.sym == *"replace"
+            }
+            _ => false,
+        }
+    }
+
+    fn is_valid_identifier(e: &Expr) -> bool {
+        // check if the identifier is a regex call match, exec, test
+        match e {
+            Expr::Member(member_expr) => {
+                Self::is_regex_identifier(&member_expr.obj) && Self::is_regex_method(e)
+            }
+            _ => false,
+        }
+    }
+}
 
 impl VisitMut for TransformVisitor {
     // Implement necessary visit_mut_* methods for actual custom transform.
     // A comprehensive list of possible visitor methods can be found here:
     // https://rustdoc.swc.rs/swc_ecma_visit/trait.VisitMut.html
-    fn visit_mut_bin_expr(&mut self, e: &mut BinExpr) {
-        e.visit_mut_children_with(self);
+    // fn visit_mut_bin_expr(&mut self, e: &mut BinExpr) {
+    //     e.visit_mut_children_with(self);
 
-        if e.op == op!("===") {
-            e.left = Box::new(Ident::new("kdy1".into(), e.left.span()).into());
+    fn visit_mut_stmt(&mut self, n: &mut Stmt) {
+        n.visit_mut_children_with(self);
+
+        // use performance.now() to measure time
+        if let Stmt::Expr(expr_stmt) = n {
+            if let Expr::Call(call) = &*expr_stmt.expr {
+                if let Callee::Expr(callee) = &call.callee {
+                    if Self::is_valid_identifier(callee) {
+                        let start_time_expr = Expr::Call(CallExpr {
+                            span: DUMMY_SP,
+                            callee: Callee::Expr(Box::new(Expr::Member(MemberExpr {
+                                span: DUMMY_SP,
+                                obj: Box::new(Expr::Ident(Ident::new("console".into(), DUMMY_SP))),
+                                prop: MemberProp::Ident(Ident::new("time".into(), DUMMY_SP)),
+                            }))),
+                            args: vec![Expr::Lit(Lit::Str(Str {
+                                span: DUMMY_SP,
+                                value: "regex".into(),
+                                raw: None,
+                            }))
+                            .into()],
+                            type_args: None,
+                        });
+
+                        let end_time_expr = Expr::Call(CallExpr {
+                            span: DUMMY_SP,
+                            callee: Callee::Expr(Box::new(Expr::Member(MemberExpr {
+                                span: DUMMY_SP,
+                                obj: Box::new(Expr::Ident(Ident::new("console".into(), DUMMY_SP))),
+                                prop: MemberProp::Ident(Ident::new("timeEnd".into(), DUMMY_SP)),
+                            }))),
+                            args: vec![Expr::Lit(Lit::Str(Str {
+                                span: DUMMY_SP,
+                                value: "regex".into(),
+                                raw: None,
+                            }))
+                            .into()],
+                            type_args: None,
+                        });
+
+                        let new_stmt = Stmt::Block(BlockStmt {
+                            span: DUMMY_SP,
+                            stmts: vec![
+                                Stmt::Expr(ExprStmt {
+                                    span: DUMMY_SP,
+                                    expr: Box::new(start_time_expr),
+                                }),
+                                Stmt::Expr(ExprStmt {
+                                    span: DUMMY_SP,
+                                    expr: Box::new(Expr::Call(CallExpr {
+                                        span: DUMMY_SP,
+                                        callee: call.callee.clone(),
+                                        args: call.args.clone(),
+                                        type_args: call.type_args.clone(),
+                                    })),
+                                }),
+                                Stmt::Expr(ExprStmt {
+                                    span: DUMMY_SP,
+                                    expr: Box::new(end_time_expr),
+                                }),
+                            ],
+                        });
+
+                        *n = new_stmt;
+                    }
+                }
+            }
         }
     }
 }
@@ -42,17 +155,3 @@ impl VisitMut for TransformVisitor {
 pub fn process_transform(program: Program, _metadata: TransformPluginProgramMetadata) -> Program {
     program.fold_with(&mut as_folder(TransformVisitor))
 }
-
-// An example to test plugin transform.
-// Recommended strategy to test plugin's transform is verify
-// the Visitor's behavior, instead of trying to run `process_transform` with mocks
-// unless explicitly required to do so.
-test_inline!(
-    Default::default(),
-    |_| as_folder(TransformVisitor),
-    boo,
-    // Input codes
-    r#"foo === bar;"#,
-    // Output codes after transformed with plugin
-    r#"kdy1 === bar;"#
-);
